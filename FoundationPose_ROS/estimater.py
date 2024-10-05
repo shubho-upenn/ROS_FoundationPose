@@ -14,6 +14,8 @@ from learning.training.predict_score import *
 from learning.training.predict_pose_refine import *
 import yaml
 
+import time
+
 
 class FoundationPose:
   def __init__(self, model_pts, model_normals, symmetry_tfs=None, mesh=None, scorer:ScorePredictor=None, refiner:PoseRefinePredictor=None, glctx=None, debug=0, debug_dir='/home/bowen/debug/novel_pose_debug/'):
@@ -267,10 +269,17 @@ class FoundationPose:
     xyz_map = depth2xyzmap_batch(depth[None], torch.as_tensor(K, dtype=torch.float, device='cuda')[None], zfar=np.inf)[0]
 
     pose, vis = self.refiner.predict(mesh=self.mesh, mesh_tensors=self.mesh_tensors, rgb=rgb, depth=depth, K=K, ob_in_cams=self.pose_last.reshape(1,4,4).data.cpu().numpy(), normal_map=None, xyz_map=xyz_map, mesh_diameter=self.diameter, glctx=self.glctx, iteration=iteration, get_vis=self.debug>=2)
+    
+    start = time.time()
+    scores, vis = self.scorer.predict(mesh=self.mesh, rgb=rgb, depth=depth, K=K, ob_in_cams=pose.data.cpu().numpy(), normal_map=None, mesh_tensors=self.mesh_tensors, glctx=self.glctx, mesh_diameter=self.diameter, get_vis=self.debug>=2)
+    end = time.time()
+    # print(f'Scorer took {end - start}')
+
     logging.info("pose done")
     if self.debug>=2:
       extra['vis'] = vis
     self.pose_last = pose
-    return (pose@self.get_tf_to_centered_mesh()).data.cpu().numpy().reshape(4,4)
+
+    return scores[0], (pose@self.get_tf_to_centered_mesh()).data.cpu().numpy().reshape(4,4)
 
 
